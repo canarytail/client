@@ -5,10 +5,12 @@
 
 ### OS X & Linux:
 
-In order to build, make sure you have `go` installed and the `GOPATH` set to its location (skip this if you already know how to use `go`).
+*Skip this step if you already know how to use `go`*
+
+In order to build, make sure you have `go` installed and the `GOPATH` set to its location. It will likely be `/usr/local/go`. Replace the example below with your `go` location.
 
 ```sh
-export GOROOT=$HOME/go
+export GOROOT=/usr/local/go
 export PATH=$PATH:$GOROOT/bin
 ```
 
@@ -27,7 +29,7 @@ Usage:
 
 ## Release History
 
-* 0.1+2
+* 0.1+3
     * Updated readme
 * 0.1
     * golang CLI for PoC

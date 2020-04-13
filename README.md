@@ -3,13 +3,7 @@
 
 ## Installation
 
-OS X & Linux:
-
-```sh
-go build ./cmd/canarytail
-```
-
-## Development setup
+### OS X & Linux:
 
 In order to build, make sure you have `go` installed and the `GOPATH` set to its location (skip this if you already know how to use `go`).
 
@@ -33,7 +27,7 @@ Usage:
 
 ## Release History
 
-* 0.1+1
+* 0.1+2
     * Updated readme
 * 0.1
     * golang CLI for PoC

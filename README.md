@@ -41,3 +41,26 @@ Usage:
 3. Commit your changes (`git commit -am 'Add some fooBar'`)
 4. Push to the branch (`git push origin feature/fooBar`)
 5. Create a new Pull Request
+
+## Backlog/wishlist (subject to change)
+
+
+* Wizard interface for generating new canary for host
+	* Sepukku pledge
+	* New canary
+	* Revoke canary
+	* Change/update to new key
+	* Human readable notice
+		* Generated
+		* User provided
+* Private key generation
+* Signing mechanism for canaries
+	* Multi-party signing
+* Signature verification
+* Keybase.io integration
+* Pruned history mechanism (diff) *(decentralized?)*
+* Blockchain proof-of-freshness integration
+* Cross-browser plugin for canary warnings (similar to "padlock" alerts)
+
+
+

@@ -46,7 +46,7 @@ Usage:
 
 
 * Wizard interface for generating new canary for host
-	* Sepukku pledge
+	* Seppuku pledge
 	* New canary
 	* Revoke canary
 	* Change/update to new key

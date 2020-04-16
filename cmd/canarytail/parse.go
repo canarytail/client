@@ -3,14 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"time"
 )
 
 var (
-	beginMessage   = []byte("-----BEGIN CANARY SIGNED MESSAGE-----")
-	beginSignature = []byte("-----BEGIN SIGNATURE-----")
-
-	errCanaryParse = errors.New("failed to parse canary message")
+	timeLayout     string = "2006-01-02T15:04:05.000"
+	beginMessage          = []byte("-----BEGIN CANARY SIGNED MESSAGE-----")
+	endMessage            = []byte("-----END CANARY SIGNED MESSAGE-----")
+	beginSignature        = []byte("-----BEGIN SIGNATURE-----")
 )
 
 func parseMessage(canary []byte) (*Message, error) {
@@ -18,7 +18,7 @@ func parseMessage(canary []byte) (*Message, error) {
 	// locate message bytes
 	i := bytes.Index(canary, beginMessage)
 	if i < 0 {
-		return nil, errCanaryParse
+		return nil, &ConsoleError{Message: "failed to parse canary message"}
 	}
 
 	start := i + len(beginMessage)
@@ -32,8 +32,18 @@ func parseMessage(canary []byte) (*Message, error) {
 
 	// unmarshall message
 	var msg Message
-	if err := json.Unmarshal(canary, &msg); err != nil {
-		return nil, err
+	var err error
+	if err = json.Unmarshal(canary, &msg); err != nil {
+		return nil, &ConsoleError{Message: "failed to parse canary message", Err: err}
+	}
+
+	msg.ReleaseDate, err = time.Parse(timeLayout, msg.Release)
+	if err != nil {
+		return nil, &ConsoleError{Message: "failed to parse canary release date", Err: err}
+	}
+	msg.ExpireDate, err = time.Parse(timeLayout, msg.Expire)
+	if err != nil {
+		return nil, &ConsoleError{Message: "failed to parse canary expire date", Err: err}
 	}
 
 	return &msg, nil

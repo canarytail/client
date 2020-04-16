@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+type Alert struct {
+	Code    string
+	Message string
+}
+
 var (
 	alertInvalidDomain      = "Invalid canary domain"
 	alertInvalidReleaseDate = "Invalid canary release date (in future)"
@@ -19,20 +24,20 @@ var (
 	alertSEIZE              = "Raids with low confidence nothing containing useful data was seized"
 	alertXCRED              = "Compromised credentials"
 	alertXOPERS             = "Compromised operations"
-	alertSEPU               = "No Seppuku pledge"
+	// alertSEPPU               = "No Seppuku pledge"
 
-	alertsMap = map[string]string{
-		"WAR":    alertWAR,
-		"GAG":    alertGAG,
-		"SUBP":   alertSUBP,
-		"TRAP":   alertTRAP,
-		"CEASE":  alertCEASE,
-		"DURESS": alertDURESS,
-		"RAID":   alertRAID,
-		"SEIZE":  alertSEIZE,
-		"XCRED":  alertXCRED,
-		"XOPERS": alertXOPERS,
-		"SEPU":   alertSEPU,
+	alertsList = []Alert{
+		Alert{Code: "WAR", Message: alertWAR},
+		Alert{Code: "GAG", Message: alertGAG},
+		Alert{Code: "SUBP", Message: alertSUBP},
+		Alert{Code: "TRAP", Message: alertTRAP},
+		Alert{Code: "CEASE", Message: alertCEASE},
+		Alert{Code: "DURESS", Message: alertDURESS},
+		Alert{Code: "RAID", Message: alertRAID},
+		Alert{Code: "SEIZE", Message: alertSEIZE},
+		Alert{Code: "XCRED", Message: alertXCRED},
+		Alert{Code: "XOPERS", Message: alertXOPERS},
+		// Alert{Code: "SEPPU", Message: alertSEPPU},
 	}
 )
 
@@ -61,13 +66,13 @@ func validateMessage(msg *Message, host string) (alerts []string) {
 	}
 
 	// 4) collect the flags
-	for code, val := range msg.Codes {
-		if (val == 0 && code != "SEPU") || (val == 1 && code == "SEPU") {
-			continue
-		}
-
-		if alert, ok := alertsMap[code]; ok {
-			alerts = append(alerts, alert)
+	canaryCodes := make(map[string]bool)
+	for _, code := range msg.Codes {
+		canaryCodes[code] = true
+	}
+	for _, alert := range alertsList {
+		if !canaryCodes[alert.Code] {
+			alerts = append(alerts, alert.Message)
 		}
 	}
 

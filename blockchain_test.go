@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/jirojo2/canarytail"
+	canarytail "github.com/canarytail/client"
 	"github.com/stretchr/testify/assert"
 )
 

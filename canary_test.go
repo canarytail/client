@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jirojo2/canarytail"
+	canarytail "github.com/canarytail/client"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -36,13 +36,13 @@ func TestMissingCodes(t *testing.T) {
 func TestIsExpired(t *testing.T) {
 	c1 := canarytail.Canary{
 		Claim: canarytail.CanaryClaim{
-			Expire: "2206-01-02T15:04:05.000",
+			Expire: "2206-01-02T15:04:05+01:00",
 		},
 	}
 
 	c2 := canarytail.Canary{
 		Claim: canarytail.CanaryClaim{
-			Expire: "2006-01-02T15:04:05.000",
+			Expire: "2006-01-02T15:04:05+01:00",
 		},
 	}
 
@@ -52,7 +52,7 @@ func TestIsExpired(t *testing.T) {
 		},
 	}
 
-	assert.True(t, c1.IsExpired())
-	assert.False(t, c2.IsExpired())
+	assert.False(t, c1.IsExpired())
+	assert.True(t, c2.IsExpired())
 	assert.True(t, c3.IsExpired())
 }

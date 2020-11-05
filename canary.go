@@ -71,7 +71,7 @@ func (c Canary) ReleaseTimestamp() time.Time {
 // IsExpired checks whether the canary is expired
 func (c Canary) IsExpired() bool {
 	t := c.ExiprationTimestamp()
-	return t.After(time.Now())
+	return t.Before(time.Now())
 }
 
 // MissingCodes gets the missing codes from this Canary's claims
@@ -112,7 +112,7 @@ func (c Canary) Validate() bool {
 	}
 
 	// check if expired
-	if !c.IsExpired() {
+	if c.IsExpired() {
 		fmt.Printf("Could not validate the canary: the canary has expired\n")
 		return false
 	}

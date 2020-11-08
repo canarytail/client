@@ -27,13 +27,6 @@ Usage:
 	canarytail https://www.example.com/canary.txt
 ```
 
-## Release History
-
-* 0.1+3
-    * Updated readme
-* 0.1
-    * golang CLI for PoC
-
 ## Contributing
 
 1. Fork it (<https://github.com/canarytail/client/fork>)

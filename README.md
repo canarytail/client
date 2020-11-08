@@ -17,7 +17,7 @@ export PATH=$PATH:$GOROOT/bin
 Build the project from the source folder for this canarytail client repo
 
 ```sh
- go build ./cmd/canarytail
+ go build ./cmd/canarytail.go
 ```
 
 Run it via `./canarytail`, which should return:

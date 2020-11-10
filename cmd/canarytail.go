@@ -12,8 +12,6 @@ import (
 
 	"github.com/alecthomas/kong"
 	canarytail "github.com/canarytail/client"
-
-	"github.com/mitchellh/go-homedir"
 )
 
 type context struct {
@@ -53,7 +51,9 @@ func (cmd *signCmd) Run(ctx *context) error {
 		return err
 	}
 
-	fmt.Println(canary.Format())
+	canaryFormatted := canary.Format()
+	writeToFile(path.Join(stagingDirPath(), "canary.json"), canaryFormatted)
+	fmt.Println(canaryFormatted)
 	return nil
 }
 
@@ -90,11 +90,11 @@ func main() {
 }
 
 func stagingDirPath() string {
-	homePath, err := homedir.Dir()
+	stagingPath, err := os.Getwd()
 	if err != nil {
-		panic(fmt.Errorf("Could not get the home dir: %v", err))
+		panic(fmt.Errorf("Could not get the current dir: %v", err))
 	}
-	return path.Join(homePath, ".canarytail")
+	return stagingPath
 }
 
 func setupStagingDir() {
@@ -106,7 +106,7 @@ func setupStagingDir() {
 }
 
 func writeToFile(path, contents string) error {
-	return ioutil.WriteFile(path, []byte(contents), 0700)
+	return ioutil.WriteFile(path, []byte(contents), 0600)
 }
 
 func generateKeyPair() error {

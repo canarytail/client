@@ -23,9 +23,73 @@ Build the project from the source folder for this canarytail client repo
 Run it via `./canarytail`, which should return:
 
 ```sh
-Usage:
-	canarytail https://www.example.com/canary.txt
+Usage: ./canarytail COMMAND [SUBCOMMAND] [OPTIONS]
+
+Commands:
+  help		                  Display this help message or help on a command
+
+  init		                  Initialize config and keys to $CANARY_HOME
+  key
+
+      This command is for manipulating cryptographic keys.
+
+      new ALIAS               Generates a new key for signing canaries and saves
+                              to $CANARY_HOME/ALIAS
+
+  canary
+
+      This command is for manipulating canaries.
+
+      new ALIAS [--OPTIONS]
+                              Generates a new canary, signs it using the key located
+                              in $CANARY_HOME/ALIAS, and saves to that same path.
+
+                              Codes provided in OPTIONS will be removed from the canary,
+                              signifying that event has triggered the canary.
+
+      update ALIAS [--OPTIONS]
+                              Updates the existing canary named ALIAS. If no OPTIONS
+                              are provided, it merely updates the signature date. If
+                              no EXPIRY is provided, it reuses the previous value
+                              (e.g. renewing for a month).
+
+                              Codes provided in OPTIONS will be removed from the canary,
+                              signifying that event has triggered the canary.
+                              
+
+      Valid OPTIONS:
+
+      --EXPIRY:#              Expires in # minutes from now (default: 43200, one month)
+      --GAG                   Gag order received
+      --TRAP                  Trap and trace order received
+      --DURESS                Under duress (coercion, blackmail, etc)
+      --XCRED                 Compromised credentials
+      --XOPERS                Operations compromised
+      --WAR                   Warrant received
+      --SUBP                  Subpoena received
+      --CEASE                 Court order to cease operations
+      --RAID                  Raided, but data unlikely compromised
+      --SEIZE                 Hardware or data seized, unlikely compromised
+
+      validate [URI]              Validates a canary's signature
+
+  version	                  Show version and exit
+
+Environment:
+  CANARY_HOME	Location of canarytail config and files (default: $PWD)
+
+
+Usage examples:
+
+New canary signing key               ./canarytail key new mydomain
+New canary with defaults             ./canarytail canary new mydomain       
+Renew existing canary 30 more days   ./canarytail canary update mydomain
+Trigger canary for warrant           ./canarytail canary update mydomain --WAR
+Validate a canary on a site          ./canarytail canary validate https://mydomain/canary.json
+Validate a canary locally            ./canarytail canary validate ~/canary.json
 ```
+
+
 
 ## Contributing
 

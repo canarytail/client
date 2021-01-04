@@ -4,7 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -32,10 +34,23 @@ type CanaryClaim struct {
 // CanarySignature we will keep this as a string for now, in the future it will support several signatures
 type CanarySignature string
 
+// StructToMap converts a struct to a map while maintaining the json alias as keys
+func StructToMap(obj interface{}) (newMap map[string]interface{}, err error) {
+	data, err := json.Marshal(obj) // Convert to a json string
+
+	if err != nil {
+		return
+	}
+
+	err = json.Unmarshal(data, &newMap) // Convert to a map
+	return
+}
+
 // Canary represents a Canary, with its claims and its signature(s)
 type Canary struct {
-	Claim     CanaryClaim     `json:"CANARY"`
-	Signature CanarySignature `json:"SIGNATURE"`
+	Claim      CanaryClaim                `json:"CANARY"`
+	Signature  CanarySignature            `json:"SIGNATURE"`
+	Signatures map[string]CanarySignature `json:"SIGNATURES"`
 }
 
 // AllCodes lists all Canary codes
@@ -54,6 +69,86 @@ func AllCodes() []string {
 		"XOPERS", // Compromised operations
 		"SEPPU",  // Seppuku pledge²
 	}
+}
+
+// Sign generates the signatures of all the canary claims
+func (c *Canary) Sign(privKey []byte) error {
+	claims, err := StructToMap(c.Claim)
+	if err != nil {
+		return err
+	}
+	for k, v := range claims {
+		c.Signatures[k], err = c.signField(k, v, privKey)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Canary) signField(name string, value interface{}, privKey []byte) (CanarySignature, error) {
+	// represent the value as a string (use the JSON representation)
+	jsonValue, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	signatureRaw := SignString(string(jsonValue), privKey)
+	signature := base64.StdEncoding.EncodeToString(signatureRaw)
+	return CanarySignature(signature), nil
+}
+
+// MarshalJSON writes the JSON value of the Canary, with all the signatures
+func (c *Canary) MarshalJSON() ([]byte, error) {
+	v, err := StructToMap(c.Claim)
+	if err != nil {
+		return nil, err
+	}
+
+	claims := make(map[string]interface{})
+	for k, v := range v {
+		claims[k] = v
+		signature, ok := c.Signatures[k]
+		if ok {
+			claims[k+"_SIGNED"] = signature
+		}
+	}
+	return json.Marshal(claims)
+}
+
+// UnmarshalJSON reads the JSON
+func (c *Canary) UnmarshalJSON(data []byte) error {
+	var v map[string]interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	claims := make(map[string]interface{})
+	for k, v := range v {
+		claims[k] = v
+	}
+
+	// extract signatures
+	for k, v := range v {
+		if strings.HasSuffix(k, "_SIGNED") {
+			var ok bool
+			c.Signatures[k], ok = v.(CanarySignature)
+			if !ok {
+				return errors.New("Invalid signature in Canary JSON")
+			}
+			delete(claims, k)
+		}
+	}
+
+	// extract claims
+	claimsString, err := json.Marshal(claims)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(claimsString, &c.Claim); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ExiprationTimestamp parses the expiration timestamp within this canary claims
@@ -155,8 +250,25 @@ func (c Canary) Format() string {
 	return string(contents)
 }
 
+func validateCodes(codesToValidate []string) bool {
+	allCodes := AllCodes()
+	for i := range codesToValidate {
+		valid := false
+		code := strings.ToUpper(codesToValidate[i])
+		for j := range allCodes {
+			if allCodes[j] == code {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return false
+		}
+	}
+	return true
+}
+
 // InverseCodes returns the missing codes from the standard, given a list of codes
-// TODO: validate the codes supplied and error out on invalid codes
 func InverseCodes(codesToFlag []string) []string {
 	codes := make(map[string]bool)
 	allCodes := AllCodes()
@@ -164,6 +276,11 @@ func InverseCodes(codesToFlag []string) []string {
 		code := allCodes[i]
 		codes[code] = true
 	}
+
+	// validate the codes supplied and error out on invalid codes
+	//if !validateCodes(codesToFlag) {
+	//	return nil
+	//}
 
 	for i := range codesToFlag {
 		code := codesToFlag[i]

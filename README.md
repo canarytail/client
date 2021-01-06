@@ -23,7 +23,7 @@ Build the project from the source folder for this canarytail client repo
 Run it via `./canarytail`, which should return:
 
 ```sh
-Usage: ./canarytail COMMAND [SUBCOMMAND] [OPTIONS]
+Usage: ./canarytail command [SUBCOMMAND] [OPTIONS]
 
 Commands:
   help		                  Display this help message or help on a command
@@ -59,17 +59,17 @@ Commands:
 
       Valid OPTIONS:
 
-      --EXPIRY:#              Expires in # minutes from now (default: 43200, one month)
-      --GAG                   Gag order received
-      --TRAP                  Trap and trace order received
-      --DURESS                Under duress (coercion, blackmail, etc)
-      --XCRED                 Compromised credentials
-      --XOPERS                Operations compromised
-      --WAR                   Warrant received
-      --SUBP                  Subpoena received
-      --CEASE                 Court order to cease operations
-      --RAID                  Raided, but data unlikely compromised
-      --SEIZE                 Hardware or data seized, unlikely compromised
+      --expiry:#              Expires in # minutes from now (default: 43200, one month)
+      --cease                 Court order to cease operations
+      --duress                Under duress (coercion, blackmail, etc)
+      --gag                   Gag order received
+      --raid                  Raided, but data unlikely compromised
+      --seize                 Hardware or data seized, unlikely compromised
+      --subp                  Subpoena received
+      --trap                  Trap and trace order received
+      --war                   Warrant received
+      --xcred                 Compromised credentials
+      --xopers                Operations compromised
 
       validate [URI]              Validates a canary's signature
 

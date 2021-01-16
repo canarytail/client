@@ -3,20 +3,11 @@ package canarytail
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
 	"math/rand"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
 )
-
-// FormatCanary formats a Canary object for signature and/or validation
-//
-// Essentially, it formats the JSON as per the standard. The order of the fields and the spacing is critical.
-func FormatCanary(claims CanaryClaim) string {
-	content, _ := json.MarshalIndent(claims, "", "    ")
-	return string(content)
-}
 
 // SignString signs a Canary given a private key
 func SignString(formattedCanary string, privateKey ed25519.PrivateKey) []byte {
@@ -24,20 +15,10 @@ func SignString(formattedCanary string, privateKey ed25519.PrivateKey) []byte {
 	return ed25519.Sign(privateKey, message)
 }
 
-// Sign signs a Canary given a private key
-func Sign(claims CanaryClaim, privateKey ed25519.PrivateKey) []byte {
-	return SignString(FormatCanary(claims), privateKey)
-}
-
 // ValidateSignatureString validates a Canary's signature given the corresponding public key
 func ValidateSignatureString(formattedCanary string, signature []byte, publicKey ed25519.PublicKey) bool {
 	message := []byte(formattedCanary)
 	return ed25519.Verify(publicKey, message, signature)
-}
-
-// ValidateSignature validates a Canary's signature given the corresponding public key
-func ValidateSignature(canary Canary, signature []byte, publicKey []byte) bool {
-	return ValidateSignatureString(FormatCanary(canary.Claim), signature, publicKey)
 }
 
 // deprecated: curve25519 vs ed25519

@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -32,6 +33,7 @@ var cli struct {
 	Canary struct {
 		New      canaryNewCmd      `cmd help:"Generates a new canary, signs it using the key located in $CANARY_HOME/ALIAS, and saves to that same path. Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
 		Update   canaryUpdateCmd   `cmd help:"Updates the existing canary named ALIAS. If no OPTIONS are provided, it merely updates the signature date. If no EXPIRY is provided, it reuses the previous value	(e.g. renewing for a month). Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
+		Panic    canaryPanicCmd    `cmd help:"Updates the existing canary named ALIAS. The canary is signed with the panic key, which will ensure the canary validation fails in all cases."`
 		Validate canaryValidateCmd `cmd help:"Validates a canary's signature"`
 	} `cmd help:"This command is for manipulating canaries."`
 
@@ -58,7 +60,7 @@ type keyNewCmd struct {
 func (cmd *keyNewCmd) Run(ctx *context) error {
 	stagingPath := canaryDirSafe(cmd.Alias)
 
-	fmt.Printf("Generating keypair for %v at %v...\n", cmd.Alias, stagingPath)
+	fmt.Printf("Generating signing key pair for %v at %v...\n", cmd.Alias, stagingPath)
 	defer fmt.Println("Done.")
 
 	publicKey, privateKey, err := canarytail.GenerateKeyPair()
@@ -72,6 +74,23 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 	}
 
 	err = writeToFile(path.Join(stagingPath, "private.b64"), base64.StdEncoding.EncodeToString(privateKey))
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Generating panic key pair for %v at %v...\n", cmd.Alias, stagingPath)
+
+	publicPanicKey, privatePanicKey, err := canarytail.GenerateKeyPair()
+	if err != nil {
+		panic(fmt.Errorf("Could not generate panic key pair: %v", err))
+	}
+
+	err = writeToFile(path.Join(stagingPath, "panic-public.b64"), base64.StdEncoding.EncodeToString(publicPanicKey))
+	if err != nil {
+		return err
+	}
+
+	err = writeToFile(path.Join(stagingPath, "panic-private.b64"), base64.StdEncoding.EncodeToString(privatePanicKey))
 	if err != nil {
 		return err
 	}
@@ -130,28 +149,104 @@ func getCodes(cmd canaryOpCmd) []string {
 	return canarytail.InverseCodes(codes)
 }
 
-func generateCanary(cmd canaryOpCmd) error {
+type keyPairReader func(dir string) (ed25519.PublicKey, ed25519.PrivateKey, error)
+
+func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	dir := canaryDirSafe(cmd.Alias)
 
 	// read the key pair for this canary alias
-	publickKey, privateKey, err := readKeyPair(dir)
+	publickKey, _, err := readKeyPair(dir)
 	if err != nil {
 		return err
 	}
 
-	// form the canary
+	// read the panic key pair for this canary alias
+	publicPanicKey, _, err := readPanicKeyPair(dir)
+	if err != nil {
+		return err
+	}
+
+	// read the key pair for this canary alias
+	publicSigningKey, privateSigningKey, err := signingKeyPairReader(dir)
+	if err != nil {
+		return err
+	}
+
+	// compose the canary
 	canary := &canarytail.Canary{Claim: canarytail.CanaryClaim{
-		Domain:    cmd.Alias,
-		Codes:     getCodes(cmd),
-		Release:   time.Now().Format(canarytail.TimestampLayout),
-		Freshness: canarytail.GetLastBlockChainBlockHashFormatted(),
-		Expiry:    time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
-		Version:   canarytail.StandardVersion,
-		PubKey:    canarytail.FormatKey(publickKey),
+		Domain:     cmd.Alias,
+		Codes:      getCodes(cmd),
+		Release:    time.Now().Format(canarytail.TimestampLayout),
+		Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
+		Expiry:     time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
+		Version:    canarytail.StandardVersion,
+		PublicKeys: []string{canarytail.FormatKey(publickKey)},
+		PanicKey:   canarytail.FormatKey(publicPanicKey),
 	}}
 
 	// sign it
-	err = canary.Sign(privateKey)
+	err = canary.Sign(privateSigningKey, publicSigningKey)
+	if err != nil {
+		return err
+	}
+
+	// and print it
+	canaryFormatted := canary.Format()
+	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
+	fmt.Println(canaryFormatted)
+	return nil
+}
+
+func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
+	dir := canaryDirSafe(cmd.Alias)
+
+	canary, err := readCanaryFile(path.Join(dir, "canary.json"))
+	if err != nil {
+		return err
+	}
+
+	// read the panic key pair for this canary alias
+	publicPanicKey, _, err := readPanicKeyPair(dir)
+	if err != nil {
+		return err
+	}
+
+	// read the key pair for this canary alias
+	publicSigningKey, privateSigningKey, err := signingKeyPairReader(dir)
+	if err != nil {
+		return err
+	}
+
+	// update the canary
+	canary.Claim.Release = time.Now().Format(canarytail.TimestampLayout)
+	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted()
+	canary.Claim.Expiry = time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)
+	canary.Claim.Version = canarytail.StandardVersion
+	canary.Claim.Codes = getCodes(cmd)
+
+	// if the public key is not there, add it
+	publicKeyEnc := canarytail.FormatKey(publicSigningKey)
+	if publicKeyEnc != canary.Claim.PanicKey {
+		foundPubKey := false
+		for _, x := range canary.Claim.PublicKeys {
+			if x == publicKeyEnc {
+				foundPubKey = true
+				break
+			}
+		}
+		if !foundPubKey {
+			canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, publicKeyEnc)
+		}
+	}
+
+	// if the panic key is not the same, error out
+	panicKeyEnc := canarytail.FormatKey(publicPanicKey)
+	if panicKeyEnc == publicKeyEnc && panicKeyEnc != canary.Claim.PanicKey {
+		return errors.New("The panic key does not match")
+	}
+
+	// sign it
+	err = canary.Sign(privateSigningKey, publicSigningKey)
 	if err != nil {
 		return err
 	}
@@ -170,8 +265,7 @@ type canaryNewCmd struct {
 func (cmd *canaryNewCmd) Run(ctx *context) error {
 	// make sure the canary doesnt exist yet?
 	// initialize the keys if they dont exist yet?
-	generateCanary(cmd.canaryOpCmd)
-	return nil
+	return generateCanary(cmd.canaryOpCmd, readKeyPair)
 }
 
 type canaryUpdateCmd struct {
@@ -180,8 +274,17 @@ type canaryUpdateCmd struct {
 
 func (cmd *canaryUpdateCmd) Run(ctx *context) error {
 	// make sure the canary already exists?
-	generateCanary(cmd.canaryOpCmd)
-	return nil
+	return updateCanary(cmd.canaryOpCmd, readKeyPair)
+}
+
+type canaryPanicCmd struct {
+	canaryOpCmd
+}
+
+func (cmd *canaryPanicCmd) Run(ctx *context) error {
+	// make sure the canary doesnt exist yet?
+	// initialize the keys if they dont exist yet?
+	return updateCanary(cmd.canaryOpCmd, readPanicKeyPair)
 }
 
 type canaryValidateCmd struct {
@@ -197,8 +300,8 @@ func (cmd *canaryValidateCmd) Run(ctx *context) error {
 
 	fmt.Printf("Validating canary %v...\n", cmd.URI)
 
-	if !canary.Validate() {
-		return fmt.Errorf("The canary is not valid")
+	if ok, err := canary.Validate(); !ok {
+		return err
 	}
 	fmt.Println("OK!")
 	return nil
@@ -252,6 +355,30 @@ func readKeyPair(stagingPath string) (ed25519.PublicKey, ed25519.PrivateKey, err
 	}
 
 	privateKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "private.b64"))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	publicKey, err := base64.StdEncoding.DecodeString(string(publicKeyBytes))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	privateKey, err := base64.StdEncoding.DecodeString(string(privateKeyBytes))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return publicKey, privateKey, nil
+}
+
+func readPanicKeyPair(stagingPath string) (ed25519.PublicKey, ed25519.PrivateKey, error) {
+	publicKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "panic-public.b64"))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	privateKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "panic-private.b64"))
 	if err != nil {
 		return nil, nil, err
 	}

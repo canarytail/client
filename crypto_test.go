@@ -15,8 +15,8 @@ func TestSignature(t *testing.T) {
 
 	c1 := canarytail.Canary{
 		Claim: canarytail.CanaryClaim{
-			Domain: "test",
-			PubKey: canarytail.FormatKey(publicKey),
+			Domain:     "test",
+			PublicKeys: []string{canarytail.FormatKey(publicKey)},
 		},
 	}
 	signature := canarytail.SignString(c1.Claim.Domain, privateKey)

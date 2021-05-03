@@ -49,6 +49,14 @@ func main() {
 type initCmd struct {
 }
 
+func (cmd *initCmd) Run(ctx *context) error {
+	dir := canaryHomeDir()
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return os.Mkdir(dir, 0700)
+	}
+	return nil
+}
+
 type keyCmd struct {
 	New keyNewCmd `cmd help:"Generates a new key for signing canaries and saves to $CANARY_HOME/ALIAS"`
 }
@@ -117,34 +125,34 @@ type canaryOpCmd struct {
 func getCodes(cmd canaryOpCmd) []string {
 	codes := make([]string, 0)
 	if cmd.GAG {
-		codes = append(codes, "GAG")
+		codes = append(codes, "gag")
 	}
 	if cmd.TRAP {
-		codes = append(codes, "TRAP")
+		codes = append(codes, "trap")
 	}
 	if cmd.DURESS {
-		codes = append(codes, "DURESS")
+		codes = append(codes, "duress")
 	}
 	if cmd.XCRED {
-		codes = append(codes, "XCRED")
+		codes = append(codes, "xcred")
 	}
 	if cmd.XOPERS {
-		codes = append(codes, "XOPERS")
+		codes = append(codes, "xopers")
 	}
 	if cmd.WAR {
-		codes = append(codes, "WAR")
+		codes = append(codes, "war")
 	}
 	if cmd.SUBP {
-		codes = append(codes, "SUBP")
+		codes = append(codes, "subp")
 	}
 	if cmd.CEASE {
-		codes = append(codes, "CEASE")
+		codes = append(codes, "cease")
 	}
 	if cmd.RAID {
-		codes = append(codes, "RAID")
+		codes = append(codes, "raid")
 	}
 	if cmd.SEIZE {
-		codes = append(codes, "SEIZE")
+		codes = append(codes, "seize")
 	}
 	return canarytail.InverseCodes(codes)
 }
@@ -337,6 +345,10 @@ func canaryDir(alias string) string {
 
 // returns the canary dir. if it doesnt exist, it gets created
 func canaryDirSafe(alias string) string {
+	homeDir := canaryHomeDir()
+	if _, err := os.Stat(homeDir); os.IsNotExist(err) {
+		os.Mkdir(homeDir, 0700)
+	}
 	dir := canaryDir(alias)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		os.Mkdir(dir, 0700)

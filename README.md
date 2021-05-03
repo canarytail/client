@@ -6,9 +6,9 @@
 ### Windows:
 
 ```
-$Env:GOOS="windows"; $Env:GOARCH="amd64"; go build -o canarytail-windows-amd64.exe ./cmd/
 $Env:GOOS="linux"; $Env:GOARCH="amd64"; go build -o canarytail-linux-amd64 ./cmd/
 $Env:GOOS="darwin"; $Env:GOARCH="amd64"; go build -o canarytail-darwin-amd64 ./cmd/
+$Env:GOOS="windows"; $Env:GOARCH="amd64"; go build -o canarytail-windows-amd64.exe ./cmd/
 ```
 
 ### OS X & Linux:

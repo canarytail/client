@@ -41,22 +41,22 @@ Commands:
 
       This command is for manipulating cryptographic keys.
 
-      new ALIAS               Generates a new key for signing canaries and saves
-                              to $CANARY_HOME/ALIAS
+      new DOMAIN              Generates a new key for signing canaries and saves
+                              to $CANARY_HOME/DOMAIN
 
   canary
 
       This command is for manipulating canaries.
 
-      new ALIAS [--OPTIONS]
+      new DOMAIN [--OPTIONS]
                               Generates a new canary, signs it using the key located
-                              in $CANARY_HOME/ALIAS, and saves to that same path.
+                              in $CANARY_HOME/DOMAIN, and saves to that same path.
 
                               Codes provided in OPTIONS will be removed from the canary,
                               signifying that event has triggered the canary.
 
-      update ALIAS [--OPTIONS]
-                              Updates the existing canary named ALIAS. If no OPTIONS
+      update DOMAIN [--OPTIONS]
+                              Updates the existing canary named DOMAIN. If no OPTIONS
                               are provided, it merely updates the signature date. If
                               no EXPIRY is provided, it reuses the previous value
                               (e.g. renewing for a month).
@@ -89,11 +89,11 @@ Environment:
 
 Usage examples:
 
-New canary signing key               ./canarytail key new mydomain
-New canary with defaults             ./canarytail canary new mydomain       
-Renew existing canary 30 more days   ./canarytail canary update mydomain
-Trigger canary for warrant           ./canarytail canary update mydomain --WAR
-Validate a canary on a site          ./canarytail canary validate https://mydomain/canary.json
+New canary signing key               ./canarytail key new mydomain.com
+New canary with defaults             ./canarytail canary new mydomain.com      
+Renew existing canary 30 more days   ./canarytail canary update mydomain.com
+Trigger canary for warrant           ./canarytail canary update mydomain.com --WAR
+Validate a canary on a site          ./canarytail canary validate https://mydomain.com/canary.json
 Validate a canary locally            ./canarytail canary validate ~/canary.json
 ```
 

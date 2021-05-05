@@ -27,12 +27,12 @@ var cli struct {
 	Init initCmd `cmd help:"Initialize config and keys to $CANARY_HOME"`
 
 	Key struct {
-		New keyNewCmd `cmd help:"Generates a new key for signing canaries and saves to $CANARY_HOME/ALIAS"`
+		New keyNewCmd `cmd help:"Generates a new key for signing canaries and saves to $CANARY_HOME/DOMAIN"`
 	} `cmd help:"This command is for manipulating cryptographic keys."`
 
 	Canary struct {
-		New      canaryNewCmd      `cmd help:"Generates a new canary, signs it using the key located in $CANARY_HOME/ALIAS, and saves to that same path. Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
-		Update   canaryUpdateCmd   `cmd help:"Updates the existing canary named ALIAS. If no OPTIONS are provided, it merely updates the signature date. If no EXPIRY is provided, it reuses the previous value	(e.g. renewing for a month). Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
+		New      canaryNewCmd      `cmd help:"Generates a new canary, signs it using the key located in $CANARY_HOME/DOMAIN, and saves to that same path.  Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
+		Update   canaryUpdateCmd   `cmd help:"Updates the existing canary named DOMAIN. If no OPTIONS are provided, it merely updates the signature date. If no EXPIRY is provided, it reuses the previous value (e.g. renewing for a month).  Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
 		Panic    canaryPanicCmd    `cmd help:"Updates the existing canary named ALIAS. The canary is signed with the panic key, which will ensure the canary validation fails in all cases."`
 		Validate canaryValidateCmd `cmd help:"Validates a canary's signature"`
 	} `cmd help:"This command is for manipulating canaries."`
@@ -41,7 +41,7 @@ var cli struct {
 }
 
 func main() {
-	ctx := kong.Parse(&cli)
+	ctx := kong.Parse(&cli, kong.UsageOnError())
 	err := ctx.Run(&context{Debug: cli.Debug})
 	ctx.FatalIfErrorf(err)
 }
@@ -62,13 +62,13 @@ type keyCmd struct {
 }
 
 type keyNewCmd struct {
-	Alias string `arg name:"alias" help:"Alias of the canary"`
+	Domain string `arg name:"DOMAIN" help:"Domain of the canary"`
 }
 
 func (cmd *keyNewCmd) Run(ctx *context) error {
-	stagingPath := canaryDirSafe(cmd.Alias)
+	stagingPath := canaryDirSafe(cmd.Domain)
 
-	fmt.Printf("Generating signing key pair for %v at %v...\n", cmd.Alias, stagingPath)
+	fmt.Printf("Generating signing key pair for %v at %v...\n", cmd.Domain, stagingPath)
 	defer fmt.Println("Done.")
 
 	publicKey, privateKey, err := canarytail.GenerateKeyPair()
@@ -86,7 +86,7 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 		return err
 	}
 
-	fmt.Printf("Generating panic key pair for %v at %v...\n", cmd.Alias, stagingPath)
+	fmt.Printf("Generating panic key pair for %v at %v...\n", cmd.Domain, stagingPath)
 
 	publicPanicKey, privatePanicKey, err := canarytail.GenerateKeyPair()
 	if err != nil {
@@ -107,7 +107,7 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 }
 
 type canaryOpCmd struct {
-	Alias string `arg name:"alias"`
+	Domain string `arg name:"DOMAIN"`
 
 	Expiry int  `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
 	GAG    bool `name:"GAG" help:"Gag order received"`
@@ -160,7 +160,7 @@ func getCodes(cmd canaryOpCmd) []string {
 type keyPairReader func(dir string) (ed25519.PublicKey, ed25519.PrivateKey, error)
 
 func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
-	dir := canaryDirSafe(cmd.Alias)
+	dir := canaryDirSafe(cmd.Domain)
 
 	// read the key pair for this canary alias
 	publickKey, _, err := readKeyPair(dir)
@@ -182,7 +182,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// compose the canary
 	canary := &canarytail.Canary{Claim: canarytail.CanaryClaim{
-		Domain:     cmd.Alias,
+		Domain:     cmd.Domain,
 		Codes:      getCodes(cmd),
 		Release:    time.Now().Format(canarytail.TimestampLayout),
 		Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
@@ -206,7 +206,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 }
 
 func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
-	dir := canaryDirSafe(cmd.Alias)
+	dir := canaryDirSafe(cmd.Domain)
 
 	canary, err := readCanaryFile(path.Join(dir, "canary.json"))
 	if err != nil {

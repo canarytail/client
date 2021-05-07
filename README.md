@@ -5,6 +5,8 @@
 
 ### Windows:
 
+In PowerShell:
+
 ```
 $Env:GOOS="linux"; $Env:GOARCH="amd64"; go build -o canarytail-linux-amd64 ./cmd/
 $Env:GOOS="darwin"; $Env:GOARCH="amd64"; go build -o canarytail-darwin-amd64 ./cmd/

@@ -26,7 +26,7 @@ type CanaryClaim struct {
 	Expiry     string   `json:"expiry"`  // 2019-03-06T22:23:09.963
 	Freshness  string   `json:"freshness"`
 	Codes      []string `json:"codes"`
-	IPFSHash   *string  `json:"ipfs_hash,omitempty"`
+	IPNSKey    *string  `json:"ipns_key,omitempty"`
 }
 
 // CanarySignature we will keep this as a string for now, in the future it will support several signatures
@@ -41,7 +41,7 @@ type CanarySignatureSet struct {
 	Expiry     CanarySignature  `json:"expiry"`
 	Freshness  CanarySignature  `json:"freshness"`
 	Codes      CanarySignature  `json:"codes"`
-	IPFSHash   *CanarySignature `json:"ipfs_hash,omitempty"`
+	IPNSKey    *CanarySignature `json:"ipns_key,omitempty"`
 }
 
 // StructToMap converts a struct to a map while maintaining the json alias as keys
@@ -181,12 +181,12 @@ func (c *Canary) Sign(privKey, pubKey []byte) (err error) {
 	if signatureSet.Codes, err = c.signField(c.Claim.Codes, privKey); err != nil {
 		return
 	}
-	if c.Claim.IPFSHash != nil && *c.Claim.IPFSHash != "" {
-		ipfhHashSign, err := c.signField(*c.Claim.IPFSHash, privKey)
+	if c.Claim.IPNSKey != nil && *c.Claim.IPNSKey != "" {
+		ipnsKeySign, err := c.signField(*c.Claim.IPNSKey, privKey)
 		if err != nil {
 			return err
 		}
-		signatureSet.IPFSHash = &ipfhHashSign
+		signatureSet.IPNSKey = &ipnsKeySign
 	}
 	return
 }

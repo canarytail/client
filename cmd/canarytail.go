@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/canarytail/client/ipfs"
 	"io/ioutil"
 	"os"
 	"path"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	canarytail "github.com/canarytail/client"
+	"github.com/canarytail/client/ipfs"
 )
 
 const version = "0.1"

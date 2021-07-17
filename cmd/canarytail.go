@@ -110,19 +110,19 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 type canaryOpCmd struct {
 	Domain string `arg name:"DOMAIN"`
 
-	Expiry   int    `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
-	GAG      bool   `name:"GAG" help:"Gag order received"`
-	TRAP     bool   `name:"TRAP" help:"Trap and trace order received"`
-	DURESS   bool   `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
-	XCRED    bool   `name:"XCRED" help:"Compromised credentials"`
-	XOPERS   bool   `name:"XOPERS" help:"Operations compromised"`
-	WAR      bool   `name:"WAR" help:"Warrant received"`
-	SUBP     bool   `name:"SUBP" help:"Subpoena received"`
-	CEASE    bool   `name:"CEASE" help:"Court order to cease operations"`
-	RAID     bool   `name:"RAID" help:"Raided, but data unlikely compromised"`
-	SEIZE    bool   `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
-	IPFSHash string `name:"ipfs_hash" help:"IPFS directory hash to store/read the canaries"`
-	IPFSURL  string `name:"ipfs_url" help:"IPFS API URL to perform read/write operations"`
+	Expiry  int    `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
+	GAG     bool   `name:"GAG" help:"Gag order received"`
+	TRAP    bool   `name:"TRAP" help:"Trap and trace order received"`
+	DURESS  bool   `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
+	XCRED   bool   `name:"XCRED" help:"Compromised credentials"`
+	XOPERS  bool   `name:"XOPERS" help:"Operations compromised"`
+	WAR     bool   `name:"WAR" help:"Warrant received"`
+	SUBP    bool   `name:"SUBP" help:"Subpoena received"`
+	CEASE   bool   `name:"CEASE" help:"Court order to cease operations"`
+	RAID    bool   `name:"RAID" help:"Raided, but data unlikely compromised"`
+	SEIZE   bool   `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
+	IPNSKey string `name:"ipns_key" help:"IPNS key where existing canaries are stored and new ones should be stored"`
+	IPFSURL string `name:"ipfs_url" help:"IPFS API URL to perform read/write operations"`
 }
 
 func getCodes(cmd canaryOpCmd) []string {
@@ -196,9 +196,9 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		PanicKey:   canarytail.FormatKey(publicPanicKey),
 	}}
 
-	h := cmd.IPFSHash
+	h := cmd.IPNSKey
 	if h != "" {
-		canary.Claim.IPFSHash = &h
+		canary.Claim.IPNSKey = &h
 	}
 
 	// sign it
@@ -207,7 +207,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		return err
 	}
 
-	if canary.Claim.IPFSHash != nil && cmd.IPFSURL != "" {
+	if canary.Claim.IPNSKey != nil && cmd.IPFSURL != "" {
 		if err := ipfs.StoreCanary(cmd.IPFSURL, canary, releaseTime); err != nil {
 			return fmt.Errorf("failed to write canary to IPFS: %s", err.Error())
 		}

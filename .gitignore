@@ -16,3 +16,12 @@ canarytail-*-*
 # vendor/
 
 .vscode/
+
+vendor
+
+# Binaries
+canarytail
+canarytail-windows-amd64.exe
+canarytail-linux-amd64
+canarytail-darwin-amd64
+canarytail-darwin-arm64

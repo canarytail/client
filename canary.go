@@ -16,16 +16,18 @@ const TimestampLayout string = time.RFC3339
 // StandardVersion represents the current standard version being used by this library
 const StandardVersion string = "0.1"
 
+// AuthorName is the name given to the author.
+const AuthorName string = "author"
+
 // CanaryClaim the claims that conform this canary
 type CanaryClaim struct {
-	Domain     string   `json:"domain"`
-	PublicKeys []string `json:"pubkeys"`
-	PanicKey   string   `json:"panickey"`
-	Version    string   `json:"version"`
-	Release    string   `json:"release"` // 2019-03-06T22:23:09.963
-	Expiry     string   `json:"expiry"`  // 2019-03-06T22:23:09.963
-	Freshness  string   `json:"freshness"`
-	Codes      []string `json:"codes"`
+	Domain     string      `json:"domain"`
+	PublicKeys []PublicKey `json:"pubkeys"`
+	PanicKey   string      `json:"panickey"`
+	Release    string      `json:"release"` // 2019-03-06T22:23:09.963
+	Expiry     string      `json:"expiry"`  // 2019-03-06T22:23:09.963
+	Freshness  string      `json:"freshness"`
+	Codes      []string    `json:"codes"`
 }
 
 // CanarySignature we will keep this as a string for now, in the future it will support several signatures
@@ -40,6 +42,15 @@ type CanarySignatureSet struct {
 	Expiry     CanarySignature `json:"expiry"`
 	Freshness  CanarySignature `json:"freshness"`
 	Codes      CanarySignature `json:"codes"`
+}
+
+type PublicKey struct {
+	// Signer is the name of the signer.
+	Signer string `json:"signer"`
+	// Key is the public key
+	Key string `json:"key"`
+	// Required is true if required for verification.
+	Required bool `json:"required"`
 }
 
 // StructToMap converts a struct to a map while maintaining the json alias as keys
@@ -81,7 +92,7 @@ func NewCanaryValidator(canary Canary) (validator *CanaryValidator) {
 	for _, pubKey := range canary.Claim.PublicKeys {
 		validator.Validators = append(validator.Validators, CanarySignatureValidator{
 			Canary:    canary,
-			PublicKey: pubKey,
+			PublicKey: pubKey.Key,
 		})
 	}
 	return
@@ -123,6 +134,7 @@ func (v *CanarySignatureValidator) Validate() (bool, error) {
 
 // Canary represents a Canary, with its claims and its signature(s)
 type Canary struct {
+	Version    string                         `json:"version"`
 	Claim      CanaryClaim                    `json:"canary"`
 	Signatures map[string]*CanarySignatureSet `json:"signatures"` // the key of the map is the public key that signs the signature set
 }
@@ -164,7 +176,7 @@ func (c *Canary) Sign(privKey, pubKey []byte) (err error) {
 	if signatureSet.PanicKey, err = c.signField(c.Claim.PanicKey, privKey); err != nil {
 		return
 	}
-	if signatureSet.Version, err = c.signField(c.Claim.Version, privKey); err != nil {
+	if signatureSet.Version, err = c.signField(c.Version, privKey); err != nil {
 		return
 	}
 	if signatureSet.Release, err = c.signField(c.Claim.Release, privKey); err != nil {
@@ -212,7 +224,7 @@ func (c *Canary) ValidateSignatures(pubKey []byte) bool {
 	if !c.validateSignature(c.Claim.PanicKey, signatureSet.PanicKey, pubKey) {
 		return false
 	}
-	if !c.validateSignature(c.Claim.Version, signatureSet.Version, pubKey) {
+	if !c.validateSignature(c.Version, signatureSet.Version, pubKey) {
 		return false
 	}
 	if !c.validateSignature(c.Claim.Release, signatureSet.Release, pubKey) {

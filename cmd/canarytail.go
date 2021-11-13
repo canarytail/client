@@ -181,16 +181,24 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	}
 
 	// compose the canary
-	canary := &canarytail.Canary{Claim: canarytail.CanaryClaim{
-		Domain:     cmd.Domain,
-		Codes:      getCodes(cmd),
-		Release:    time.Now().Format(canarytail.TimestampLayout),
-		Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
-		Expiry:     time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
-		Version:    canarytail.StandardVersion,
-		PublicKeys: []string{canarytail.FormatKey(publickKey)},
-		PanicKey:   canarytail.FormatKey(publicPanicKey),
-	}}
+	canary := &canarytail.Canary{
+		Version: canarytail.StandardVersion,
+		Claim: canarytail.CanaryClaim{
+			Domain:    cmd.Domain,
+			Codes:     getCodes(cmd),
+			Release:   time.Now().Format(canarytail.TimestampLayout),
+			Freshness: canarytail.GetLastBlockChainBlockHashFormatted(),
+			Expiry:    time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
+			PublicKeys: []canarytail.PublicKey{
+				{
+					Signer:   canarytail.AuthorName,
+					Key:      canarytail.FormatKey(publickKey),
+					Required: true,
+				},
+			},
+			PanicKey: canarytail.FormatKey(publicPanicKey),
+		},
+	}
 
 	// sign it
 	err = canary.Sign(privateSigningKey, publicSigningKey)
@@ -229,7 +237,7 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	canary.Claim.Release = time.Now().Format(canarytail.TimestampLayout)
 	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted()
 	canary.Claim.Expiry = time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)
-	canary.Claim.Version = canarytail.StandardVersion
+	canary.Version = canarytail.StandardVersion
 	canary.Claim.Codes = getCodes(cmd)
 
 	// if the public key is not there, add it
@@ -237,13 +245,17 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	if publicKeyEnc != canary.Claim.PanicKey {
 		foundPubKey := false
 		for _, x := range canary.Claim.PublicKeys {
-			if x == publicKeyEnc {
+			if x.Key == publicKeyEnc {
 				foundPubKey = true
 				break
 			}
 		}
 		if !foundPubKey {
-			canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, publicKeyEnc)
+			canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, canarytail.PublicKey{
+				Signer:   canarytail.AuthorName,
+				Key:      "publicKeyEnc",
+				Required: true,
+			})
 		}
 	}
 

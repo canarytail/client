@@ -37,6 +37,7 @@ var cli struct {
 		Update   canaryUpdateCmd   `cmd help:"Updates the existing canary named DOMAIN. If no OPTIONS are provided, it merely updates the signature date. If no EXPIRY is provided, it reuses the previous value (e.g. renewing for a month).  Codes provided in OPTIONS will be removed from the canary, signifying that event has triggered the canary."`
 		Panic    canaryPanicCmd    `cmd help:"Updates the existing canary named ALIAS. The canary is signed with the panic key, which will ensure the canary validation fails in all cases."`
 		Validate canaryValidateCmd `cmd help:"Validates a canary's signature"`
+		Sign     canarySignCmd     `cmd help:"Sign's a canary with keys stored in $CANARY_HOME/DOMAIN"`
 	} `cmd help:"This command is for manipulating canaries."`
 
 	Version versionCmd `cmd help:"Show version and exit"`
@@ -230,7 +231,9 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// and print it
 	canaryFormatted := canary.Format()
-	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
+	if err := writeToFile(path.Join(dir, "canary.json"), canaryFormatted); err != nil {
+		return err
+	}
 	fmt.Println(canaryFormatted)
 	printNextSignerSuggestion(canary)
 	return nil
@@ -386,7 +389,9 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// and print it
 	canaryFormatted := canary.Format()
-	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
+	if err := writeToFile(path.Join(dir, "canary.json"), canaryFormatted); err != nil {
+		return err
+	}
 	fmt.Println(canaryFormatted)
 	printNextSignerSuggestion(&canary)
 	return nil
@@ -438,6 +443,39 @@ func (cmd *canaryValidateCmd) Run(ctx *context) error {
 		return err
 	}
 	fmt.Println("OK!")
+	return nil
+}
+
+type canarySignCmd struct {
+	Path string `arg name:"canary_path"`
+}
+
+func (cmd *canarySignCmd) Run(ctx *context) error {
+	canary, err := canarytail.ReadFile(cmd.Path)
+	if err != nil {
+		return err
+	}
+	dir := canaryDirSafe(canary.Claim.Domain)
+
+	publicSigningKey, privateSigningKey, err := readKeyPair(dir)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Signing canary %v...\n", cmd.Path)
+
+	err = canary.Sign(privateSigningKey, publicSigningKey)
+	if err != nil {
+		return err
+	}
+
+	canaryFormatted := canary.Format()
+	if err := writeToFile(cmd.Path, canaryFormatted); err != nil {
+		return err
+	}
+
+	fmt.Println(canaryFormatted)
+	printNextSignerSuggestion(&canary)
 	return nil
 }
 

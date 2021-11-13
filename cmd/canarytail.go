@@ -109,17 +109,18 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 type canaryOpCmd struct {
 	Domain string `arg name:"DOMAIN"`
 
-	Expiry int  `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
-	GAG    bool `name:"GAG" help:"Gag order received"`
-	TRAP   bool `name:"TRAP" help:"Trap and trace order received"`
-	DURESS bool `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
-	XCRED  bool `name:"XCRED" help:"Compromised credentials"`
-	XOPERS bool `name:"XOPERS" help:"Operations compromised"`
-	WAR    bool `name:"WAR" help:"Warrant received"`
-	SUBP   bool `name:"SUBP" help:"Subpoena received"`
-	CEASE  bool `name:"CEASE" help:"Court order to cease operations"`
-	RAID   bool `name:"RAID" help:"Raided, but data unlikely compromised"`
-	SEIZE  bool `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
+	Expiry     int  `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
+	GAG        bool `name:"GAG" help:"Gag order received"`
+	TRAP       bool `name:"TRAP" help:"Trap and trace order received"`
+	DURESS     bool `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
+	XCRED      bool `name:"XCRED" help:"Compromised credentials"`
+	XOPERS     bool `name:"XOPERS" help:"Operations compromised"`
+	WAR        bool `name:"WAR" help:"Warrant received"`
+	SUBP       bool `name:"SUBP" help:"Subpoena received"`
+	CEASE      bool `name:"CEASE" help:"Court order to cease operations"`
+	RAID       bool `name:"RAID" help:"Raided, but data unlikely compromised"`
+	SEIZE      bool `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
+	MinSigners int  `name:"min-signers" help:"Minimum number of signers that are required to sign the canary for it to be valid (default and minimum allowed is 1)"`
 }
 
 func getCodes(cmd canaryOpCmd) []string {
@@ -180,15 +181,20 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		return err
 	}
 
+	if cmd.MinSigners < 1 {
+		cmd.MinSigners = 1
+	}
+
 	// compose the canary
 	canary := &canarytail.Canary{
 		Version: canarytail.StandardVersion,
 		Claim: canarytail.CanaryClaim{
-			Domain:    cmd.Domain,
-			Codes:     getCodes(cmd),
-			Release:   time.Now().Format(canarytail.TimestampLayout),
-			Freshness: canarytail.GetLastBlockChainBlockHashFormatted(),
-			Expiry:    time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
+			Domain:     cmd.Domain,
+			MinSigners: cmd.MinSigners,
+			Codes:      getCodes(cmd),
+			Release:    time.Now().Format(canarytail.TimestampLayout),
+			Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
+			Expiry:     time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
 			PublicKeys: []canarytail.PublicKey{
 				{
 					Signer:   canarytail.AuthorName,
@@ -233,7 +239,12 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		return err
 	}
 
+	if cmd.MinSigners < 1 {
+		cmd.MinSigners = 1
+	}
+
 	// update the canary
+	canary.Claim.MinSigners = cmd.MinSigners
 	canary.Claim.Release = time.Now().Format(canarytail.TimestampLayout)
 	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted()
 	canary.Claim.Expiry = time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)

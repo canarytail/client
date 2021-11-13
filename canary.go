@@ -22,6 +22,7 @@ const AuthorName string = "author"
 // CanaryClaim the claims that conform this canary
 type CanaryClaim struct {
 	Domain     string      `json:"domain"`
+	MinSigners int         `json:"min_signers"`
 	PublicKeys []PublicKey `json:"pubkeys"`
 	PanicKey   string      `json:"panickey"`
 	Release    string      `json:"release"` // 2019-03-06T22:23:09.963
@@ -35,6 +36,7 @@ type CanarySignature string
 
 type CanarySignatureSet struct {
 	Domain     CanarySignature `json:"domain"`
+	MinSigners CanarySignature `json:"min_signers"`
 	PublicKeys CanarySignature `json:"pubkeys"`
 	PanicKey   CanarySignature `json:"panickey"`
 	Version    CanarySignature `json:"version"`
@@ -168,6 +170,9 @@ func (c *Canary) Sign(privKey, pubKey []byte) (err error) {
 
 	// Sign the fields
 	if signatureSet.Domain, err = c.signField(c.Claim.Domain, privKey); err != nil {
+		return
+	}
+	if signatureSet.MinSigners, err = c.signField(c.Claim.MinSigners, privKey); err != nil {
 		return
 	}
 	if signatureSet.PublicKeys, err = c.signField(c.Claim.PublicKeys, privKey); err != nil {

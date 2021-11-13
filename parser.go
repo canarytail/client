@@ -17,6 +17,11 @@ func Read(url string) (Canary, error) {
 	return readFile(url)
 }
 
+// ReadFile parses a canary from a local path
+func ReadFile(path string) (Canary, error) {
+	return readFile(path)
+}
+
 func isHTTP(url string) bool {
 	return strings.HasPrefix(strings.ToLower(url), "http")
 }

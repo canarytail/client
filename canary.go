@@ -110,10 +110,7 @@ func (v *CanaryValidator) Validate() (bool, error) {
 
 	// Checking if we have all required signatures.
 	for _, pubKey := range v.Canary.Claim.PublicKeys {
-		if !pubKey.Required {
-			continue
-		}
-		if _, ok := v.Canary.Signatures[pubKey.Key]; !ok {
+		if _, ok := v.Canary.Signatures[pubKey.Key]; pubKey.Required && !ok {
 			return false, fmt.Errorf("requires signature not found from the signer %q", pubKey.Signer)
 		}
 	}

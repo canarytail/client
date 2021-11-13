@@ -215,6 +215,13 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	}
 	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
 
+	if len(canary.Claim.PublicKeys) < canary.Claim.MinSigners {
+		return fmt.Errorf(
+			"total number of signers should be at least min signers, min_signers=%d, total=%d",
+			canary.Claim.MinSigners, len(canary.Claim.PublicKeys),
+		)
+	}
+
 	// sign it
 	err = canary.Sign(privateSigningKey, publicSigningKey)
 	if err != nil {
@@ -225,6 +232,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	canaryFormatted := canary.Format()
 	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
 	fmt.Println(canaryFormatted)
+	printNextSignerSuggestion(canary)
 	return nil
 }
 
@@ -270,6 +278,34 @@ func decodeSigners(ss []string) ([]canarytail.PublicKey, error) {
 	})
 
 	return signerSlice, nil
+}
+
+func printNextSignerSuggestion(c *canarytail.Canary) {
+	signCriteriaMet := len(c.Signatures) >= c.Claim.MinSigners
+	nextSigner := ""
+	for _, pubKey := range c.Claim.PublicKeys {
+		_, ok := c.Signatures[pubKey.Key]
+		if pubKey.Required && !ok {
+			signCriteriaMet = false
+		}
+		if nextSigner == "" && !ok {
+			nextSigner = pubKey.Signer
+		}
+	}
+
+	if signCriteriaMet && nextSigner == "" {
+		// All signers are done.
+		fmt.Printf("Everyone has finished signing, please send the canary back to %s.\n", canarytail.AuthorName)
+	} else if signCriteriaMet && nextSigner != "" {
+		// Criteria met but signers are left.
+		fmt.Printf(
+			"Signing criteria has met. You can either send the canary back to %s, or send it to %q for further signing.\n",
+			canarytail.AuthorName, nextSigner,
+		)
+	} else {
+		// Criteria not met.
+		fmt.Printf("Please send the canary to %q for further signing.\n", nextSigner)
+	}
 }
 
 func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
@@ -335,6 +371,13 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	}
 	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
 
+	if len(canary.Claim.PublicKeys) < canary.Claim.MinSigners {
+		return fmt.Errorf(
+			"total number of signers should be at least min signers, min_signers=%d, total=%d",
+			canary.Claim.MinSigners, len(canary.Claim.PublicKeys),
+		)
+	}
+
 	// sign it
 	err = canary.Sign(privateSigningKey, publicSigningKey)
 	if err != nil {
@@ -345,6 +388,7 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	canaryFormatted := canary.Format()
 	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
 	fmt.Println(canaryFormatted)
+	printNextSignerSuggestion(&canary)
 	return nil
 }
 

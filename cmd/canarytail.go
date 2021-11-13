@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -109,18 +111,19 @@ func (cmd *keyNewCmd) Run(ctx *context) error {
 type canaryOpCmd struct {
 	Domain string `arg name:"DOMAIN"`
 
-	Expiry     int  `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
-	GAG        bool `name:"GAG" help:"Gag order received"`
-	TRAP       bool `name:"TRAP" help:"Trap and trace order received"`
-	DURESS     bool `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
-	XCRED      bool `name:"XCRED" help:"Compromised credentials"`
-	XOPERS     bool `name:"XOPERS" help:"Operations compromised"`
-	WAR        bool `name:"WAR" help:"Warrant received"`
-	SUBP       bool `name:"SUBP" help:"Subpoena received"`
-	CEASE      bool `name:"CEASE" help:"Court order to cease operations"`
-	RAID       bool `name:"RAID" help:"Raided, but data unlikely compromised"`
-	SEIZE      bool `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
-	MinSigners int  `name:"min-signers" help:"Minimum number of signers that are required to sign the canary for it to be valid (default and minimum allowed is 1)"`
+	Expiry     int      `name:"expiry" help:"Expires in # minutes from now (default: 43200, one month)" default:"43200"`
+	GAG        bool     `name:"GAG" help:"Gag order received"`
+	TRAP       bool     `name:"TRAP" help:"Trap and trace order received"`
+	DURESS     bool     `name:"DURESS" help:"Under duress (coercion, blackmail, etc)"`
+	XCRED      bool     `name:"XCRED" help:"Compromised credentials"`
+	XOPERS     bool     `name:"XOPERS" help:"Operations compromised"`
+	WAR        bool     `name:"WAR" help:"Warrant received"`
+	SUBP       bool     `name:"SUBP" help:"Subpoena received"`
+	CEASE      bool     `name:"CEASE" help:"Court order to cease operations"`
+	RAID       bool     `name:"RAID" help:"Raided, but data unlikely compromised"`
+	SEIZE      bool     `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
+	MinSigners int      `name:"min-signers" help:"Minimum number of signers that are required to sign the canary for it to be valid (default and minimum allowed is 1)"`
+	Signers    []string `name:"signers" help:"List of all the signers that can sign this canary in the format 'name1:pubkey1,name2:pubkey2:required,name3:pubkey3,...'. Here the optional ':required' means that the signer is required to sign the canary."`
 }
 
 func getCodes(cmd canaryOpCmd) []string {
@@ -206,6 +209,12 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		},
 	}
 
+	signers, err := decodeSigners(cmd.Signers)
+	if err != nil {
+		return err
+	}
+	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
+
 	// sign it
 	err = canary.Sign(privateSigningKey, publicSigningKey)
 	if err != nil {
@@ -217,6 +226,50 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	writeToFile(path.Join(dir, "canary.json"), canaryFormatted)
 	fmt.Println(canaryFormatted)
 	return nil
+}
+
+func decodeSigners(ss []string) ([]canarytail.PublicKey, error) {
+	signers := make(map[string]canarytail.PublicKey, len(ss))
+
+	for _, s := range ss {
+		parts := strings.Split(s, ":")
+		if len(parts) < 2 {
+			return nil, fmt.Errorf("malformed signer, expected at least 2 ':' separated parts in %s", s)
+		}
+		if len(parts) > 3 {
+			return nil, fmt.Errorf("malformed signer, expected less than 3 ':' separated parts in %s", s)
+		}
+		if len(parts) == 3 && parts[2] != "required" {
+			return nil, fmt.Errorf("malformed signer, expected 'required' in the third part in %s", s)
+		}
+
+		if _, ok := signers[parts[0]]; ok {
+			return nil, fmt.Errorf("duplicate signer found with the name %s", parts[0])
+		}
+
+		signers[parts[0]] = canarytail.PublicKey{
+			Signer:   parts[0],
+			Key:      parts[1],
+			Required: len(parts) == 3, // parts[2] is already checked above.
+		}
+	}
+
+	signerSlice := make([]canarytail.PublicKey, 0, len(signers))
+	for _, s := range signers {
+		signerSlice = append(signerSlice, s)
+	}
+
+	// This sorting first groups the required and non-required together and
+	// sorts based on their signer name within the group.
+	sort.Slice(signerSlice, func(i, j int) bool {
+		a, b := signerSlice[i], signerSlice[j]
+		if a.Required == b.Required {
+			return a.Signer < b.Signer
+		}
+		return a.Required
+	})
+
+	return signerSlice, nil
 }
 
 func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
@@ -275,6 +328,12 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	if panicKeyEnc == publicKeyEnc && panicKeyEnc != canary.Claim.PanicKey {
 		return errors.New("The panic key does not match")
 	}
+
+	signers, err := decodeSigners(cmd.Signers)
+	if err != nil {
+		return err
+	}
+	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
 
 	// sign it
 	err = canary.Sign(privateSigningKey, publicSigningKey)

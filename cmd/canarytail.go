@@ -462,6 +462,19 @@ func (cmd *canarySignCmd) Run(ctx *context) error {
 		return err
 	}
 
+	// Check if signer exists in the list.
+	exists := false
+	pubKeyStr := canarytail.FormatKey(publicSigningKey)
+	for _, pk := range canary.Claim.PublicKeys {
+		if pk.Key == pubKeyStr {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		return fmt.Errorf("signer's public key not found in the list of signers")
+	}
+
 	fmt.Printf("Signing canary %v...\n", cmd.Path)
 
 	err = canary.Sign(privateSigningKey, publicSigningKey)

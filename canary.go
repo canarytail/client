@@ -102,17 +102,21 @@ func NewCanaryValidator(canary Canary) (validator *CanaryValidator) {
 
 // Validate validates all the registered validators (one per public key in the canary plus the panic key)
 func (v *CanaryValidator) Validate() (bool, error) {
-	// Checking for min signers.
-	if len(v.Canary.Signatures) < v.Canary.Claim.MinSigners {
-		return false, fmt.Errorf("min signers criteria not met, required %d, got %d",
-			v.Canary.Claim.MinSigners, len(v.Canary.Signatures))
-	}
-
-	// Checking if we have all required signatures.
+	signedCount := 0 // Count of listed signers that signed.
 	for _, pubKey := range v.Canary.Claim.PublicKeys {
-		if _, ok := v.Canary.Signatures[pubKey.Key]; pubKey.Required && !ok {
-			return false, fmt.Errorf("requires signature not found from the signer %q", pubKey.Signer)
+		_, ok := v.Canary.Signatures[pubKey.Key]
+		if pubKey.Required && !ok {
+			return false, fmt.Errorf("required signature not found from the signer %q", pubKey.Signer)
 		}
+		if ok {
+			signedCount++
+		}
+	}
+	// Checking for min signers.
+	// This only accounts for the listed signers.
+	if signedCount < v.Canary.Claim.MinSigners {
+		return false, fmt.Errorf("min signers criteria not met, required %d from the listed signers, got %d",
+			v.Canary.Claim.MinSigners, signedCount)
 	}
 
 	// check if the panic key has signed

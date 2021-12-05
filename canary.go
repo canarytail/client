@@ -16,8 +16,13 @@ const TimestampLayout string = time.RFC3339
 // StandardVersion represents the current standard version being used by this library
 const StandardVersion string = "0.1"
 
-// AuthorName is the name given to the author.
-const AuthorName string = "author"
+const (
+	// RoleAuthor is the role of a author.
+	RoleAuthor string = "author"
+
+	// RoleCosigner is the role of a author.
+	RoleCosigner string = "cosigner"
+)
 
 // CanaryClaim the claims that conform this canary
 type CanaryClaim struct {
@@ -47,8 +52,10 @@ type CanarySignatureSet struct {
 }
 
 type PublicKey struct {
-	// Signer is the name of the signer.
-	Signer string `json:"signer"`
+	// Role is the role of the signer.
+	Role string `json:"role"`
+	// Name is the name of the signer.
+	Name string `json:"name"`
 	// Key is the public key
 	Key string `json:"key"`
 	// Required is true if required for verification.
@@ -106,7 +113,7 @@ func (v *CanaryValidator) Validate() (bool, error) {
 	for _, pubKey := range v.Canary.Claim.PublicKeys {
 		_, ok := v.Canary.Signatures[pubKey.Key]
 		if pubKey.Required && !ok {
-			return false, fmt.Errorf("required signature not found from the signer %q", pubKey.Signer)
+			return false, fmt.Errorf("required signature not found from the signer %q", pubKey.Name)
 		}
 		if ok {
 			signedCount++

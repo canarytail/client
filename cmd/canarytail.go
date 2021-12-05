@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ var cli struct {
 		Panic    canaryPanicCmd    `cmd help:"Updates the existing canary named ALIAS. The canary is signed with the panic key, which will ensure the canary validation fails in all cases."`
 		Validate canaryValidateCmd `cmd help:"Validates a canary's signature"`
 		Sign     canarySignCmd     `cmd help:"Sign's a canary with keys stored in $CANARY_HOME/DOMAIN"`
+		Pubkey   canaryPubkeyCmd   `cmd help:"Print your public key for the domain. Use 'key new' command to create one if it does not exist."`
 	} `cmd help:"This command is for manipulating canaries."`
 
 	Version versionCmd `cmd help:"Show version and exit"`
@@ -124,7 +126,7 @@ type canaryOpCmd struct {
 	RAID       bool     `name:"RAID" help:"Raided, but data unlikely compromised"`
 	SEIZE      bool     `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
 	MinSigners int      `name:"min-signers" help:"Minimum number of signers that are required to sign the canary for it to be valid (default and minimum allowed is 1)"`
-	Signers    []string `name:"signers" help:"List of all the signers that can sign this canary in the format 'name1:pubkey1,name2:pubkey2:required,name3:pubkey3,...'. Here the optional ':required' means that the signer is required to sign the canary."`
+	Signers    []string `name:"signers" help:"List of all the signers that can sign this canary in the format 'name1:pubkey1,name2:pubkey2:required,name3:pubkey3,...'. Here the optional ':required' means that the signer is required to sign the canary. Mentioning author's public key is optional and should be used to only add a signer name to the author. Use this to also replace the list of signers."`
 }
 
 func getCodes(cmd canaryOpCmd) []string {
@@ -189,6 +191,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 		cmd.MinSigners = 1
 	}
 
+	authorKey := canarytail.FormatKey(publickKey)
 	// compose the canary
 	canary := &canarytail.Canary{
 		Version: canarytail.StandardVersion,
@@ -201,8 +204,8 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 			Expiry:     time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
 			PublicKeys: []canarytail.PublicKey{
 				{
-					Signer:   canarytail.AuthorName,
-					Key:      canarytail.FormatKey(publickKey),
+					Role:     canarytail.RoleAuthor,
+					Key:      authorKey,
 					Required: true,
 				},
 			},
@@ -214,7 +217,18 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	if err != nil {
 		return err
 	}
-	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
+	// If the 'signers' has the author, update the name of author.
+	for _, s := range signers {
+		if s.Key == authorKey {
+			// This is the author.
+			canary.Claim.PublicKeys[0].Name = s.Name
+			continue
+		}
+		canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, s)
+	}
+	if canary.Claim.PublicKeys[0].Name == "" {
+		canary.Claim.PublicKeys[0].Name = canarytail.RoleAuthor
+	}
 
 	if len(canary.Claim.PublicKeys) < canary.Claim.MinSigners {
 		return fmt.Errorf(
@@ -231,10 +245,16 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// and print it
 	canaryFormatted := canary.Format()
-	if err := writeToFile(path.Join(dir, "canary.json"), canaryFormatted); err != nil {
+	fp := path.Join(dir, "canary.json")
+	if err := writeToFile(fp, canaryFormatted); err != nil {
 		return err
 	}
-	fmt.Println(canaryFormatted)
+
+	absFp, err := filepath.Abs(fp)
+	if err != nil {
+		absFp = fp
+	}
+	fmt.Printf("New canary has been stored at %q\n", absFp)
 	printNextSignerSuggestion(canary)
 	return nil
 }
@@ -259,7 +279,8 @@ func decodeSigners(ss []string) ([]canarytail.PublicKey, error) {
 		}
 
 		signers[parts[0]] = canarytail.PublicKey{
-			Signer:   parts[0],
+			Role:     canarytail.RoleCosigner,
+			Name:     parts[0],
 			Key:      parts[1],
 			Required: len(parts) == 3, // parts[2] is already checked above.
 		}
@@ -270,17 +291,23 @@ func decodeSigners(ss []string) ([]canarytail.PublicKey, error) {
 		signerSlice = append(signerSlice, s)
 	}
 
+	signerSlice = sortSigners(signerSlice)
+
+	return signerSlice, nil
+}
+
+func sortSigners(signers []canarytail.PublicKey) []canarytail.PublicKey {
 	// This sorting first groups the required and non-required together and
 	// sorts based on their signer name within the group.
-	sort.Slice(signerSlice, func(i, j int) bool {
-		a, b := signerSlice[i], signerSlice[j]
+	sort.Slice(signers, func(i, j int) bool {
+		a, b := signers[i], signers[j]
 		if a.Required == b.Required {
-			return a.Signer < b.Signer
+			return a.Name < b.Name
 		}
 		return a.Required
 	})
 
-	return signerSlice, nil
+	return signers
 }
 
 func printNextSignerSuggestion(c *canarytail.Canary) {
@@ -292,18 +319,18 @@ func printNextSignerSuggestion(c *canarytail.Canary) {
 			signCriteriaMet = false
 		}
 		if nextSigner == "" && !ok {
-			nextSigner = pubKey.Signer
+			nextSigner = pubKey.Name
 		}
 	}
 
 	if signCriteriaMet && nextSigner == "" {
 		// All signers are done.
-		fmt.Printf("Everyone has finished signing, please send the canary back to %s.\n", canarytail.AuthorName)
+		fmt.Printf("Everyone has finished signing, please send the canary back to %s.\n", canarytail.RoleAuthor)
 	} else if signCriteriaMet && nextSigner != "" {
 		// Criteria met but signers are left.
 		fmt.Printf(
 			"Signing criteria has met. You can either send the canary back to %s, or send it to %q for further signing.\n",
-			canarytail.AuthorName, nextSigner,
+			canarytail.RoleAuthor, nextSigner,
 		)
 	} else {
 		// Criteria not met.
@@ -354,11 +381,12 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 			}
 		}
 		if !foundPubKey {
-			canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, canarytail.PublicKey{
-				Signer:   canarytail.AuthorName,
-				Key:      "publicKeyEnc",
+			// First signers is the author.
+			canary.Claim.PublicKeys = append([]canarytail.PublicKey{{
+				Role:     canarytail.RoleAuthor,
+				Key:      publicKeyEnc,
 				Required: true,
-			})
+			}}, canary.Claim.PublicKeys...)
 		}
 	}
 
@@ -372,7 +400,25 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	if err != nil {
 		return err
 	}
-	canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, signers...)
+
+	if len(signers) != 0 {
+		// Since signers are being updated, we discard all the old signers except author.
+		// This allows editing old signers too.
+		canary.Claim.PublicKeys = canary.Claim.PublicKeys[:1]
+	}
+
+	// If the 'signers' has the author, update the name of author.
+	for _, s := range signers {
+		if s.Key == publicKeyEnc {
+			// This is the author.
+			canary.Claim.PublicKeys[0].Name = s.Name
+			continue
+		}
+		canary.Claim.PublicKeys = append(canary.Claim.PublicKeys, s)
+	}
+	if canary.Claim.PublicKeys[0].Name == "" {
+		canary.Claim.PublicKeys[0].Name = canarytail.RoleAuthor
+	}
 
 	if len(canary.Claim.PublicKeys) < canary.Claim.MinSigners {
 		return fmt.Errorf(
@@ -389,10 +435,15 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// and print it
 	canaryFormatted := canary.Format()
-	if err := writeToFile(path.Join(dir, "canary.json"), canaryFormatted); err != nil {
+	fp := path.Join(dir, "canary.json")
+	if err := writeToFile(fp, canaryFormatted); err != nil {
 		return err
 	}
-	fmt.Println(canaryFormatted)
+	absFp, err := filepath.Abs(fp)
+	if err != nil {
+		absFp = fp
+	}
+	fmt.Printf("Updated canary has been stored at %q\n", absFp)
 	printNextSignerSuggestion(&canary)
 	return nil
 }
@@ -424,6 +475,25 @@ func (cmd *canaryPanicCmd) Run(ctx *context) error {
 	// make sure the canary doesnt exist yet?
 	// initialize the keys if they dont exist yet?
 	return updateCanary(cmd.canaryOpCmd, readPanicKeyPair)
+}
+
+type canaryPubkeyCmd struct {
+	Domain string `arg name:"DOMAIN"`
+}
+
+func (cmd *canaryPubkeyCmd) Run(ctx *context) error {
+	dir := canaryDirSafe(cmd.Domain)
+
+	// read the key pair for this canary alias
+	publickKey, err := readPublicKey(dir)
+	if err != nil {
+		fmt.Printf("Error when accessing public key for %q. Use 'key new %s' command to create a key if it does not exist.\n", cmd.Domain, cmd.Domain)
+		return err
+	}
+
+	key := canarytail.FormatKey(publickKey)
+	fmt.Printf("Your public key for %q is %q\n", cmd.Domain, key)
+	return nil
 }
 
 type canaryValidateCmd struct {
@@ -487,7 +557,6 @@ func (cmd *canarySignCmd) Run(ctx *context) error {
 		return err
 	}
 
-	fmt.Println(canaryFormatted)
 	printNextSignerSuggestion(&canary)
 	return nil
 }
@@ -538,27 +607,45 @@ func writeToFile(path, contents string) error {
 }
 
 func readKeyPair(stagingPath string) (ed25519.PublicKey, ed25519.PrivateKey, error) {
-	publicKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "public.b64"))
+	publicKey, err := readPublicKey(stagingPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	privateKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "private.b64"))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	publicKey, err := base64.StdEncoding.DecodeString(string(publicKeyBytes))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	privateKey, err := base64.StdEncoding.DecodeString(string(privateKeyBytes))
+	privateKey, err := readPrivateKey(stagingPath)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return publicKey, privateKey, nil
+}
+
+func readPublicKey(stagingPath string) (ed25519.PublicKey, error) {
+	publicKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "public.b64"))
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey, err := base64.StdEncoding.DecodeString(string(publicKeyBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	return publicKey, nil
+}
+
+func readPrivateKey(stagingPath string) (ed25519.PrivateKey, error) {
+	privateKeyBytes, err := ioutil.ReadFile(path.Join(stagingPath, "private.b64"))
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := base64.StdEncoding.DecodeString(string(privateKeyBytes))
+	if err != nil {
+		return nil, err
+	}
+
+	return privateKey, nil
 }
 
 func readPanicKeyPair(stagingPath string) (ed25519.PublicKey, ed25519.PrivateKey, error) {

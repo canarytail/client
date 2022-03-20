@@ -3,15 +3,30 @@
 
 ## Installation
 
+The steps below allow you to compile from the source code. If you prefer using an already pre-compiled binary, see the [releases](https://github.com/canarytail/client/releases) page.
+
 ### Windows:
 
-In PowerShell:
+In order to build in Windows, make sure you have `go` installed and the `GOPATH` set to its location.
 
+#### In PowerShell
+
+To build the binary for use **on Windows**:
 ```
-$Env:GOOS="linux"; $Env:GOARCH="amd64"; go build -o canarytail-linux-amd64 ./cmd/
-$Env:GOOS="darwin"; $Env:GOARCH="amd64"; go build -o canarytail-darwin-amd64 ./cmd/
 $Env:GOOS="windows"; $Env:GOARCH="amd64"; go build -o canarytail-windows-amd64.exe ./cmd/
 ```
+
+To build the binary for use **on Linux**:
+```
+$Env:GOOS="linux"; $Env:GOARCH="amd64"; go build -o canarytail-linux-amd64 ./cmd/
+```
+
+To build the binary for use **on Mac**:
+```
+$Env:GOOS="darwin"; $Env:GOARCH="amd64"; go build -o canarytail-darwin-amd64 ./cmd/
+```
+
+Now just run the `canarytail-dist-amd64` binary you built on whatever OS you built it for.
 
 ### OS X & Linux:
 
@@ -30,7 +45,10 @@ Build the project from the source folder for this canarytail client repo
  go build ./cmd/canarytail.go
 ```
 
-Run it via `./canarytail`, which should return:
+Run it via `./canarytail`
+
+
+### Command line arguments
 
 ```sh
 Usage: ./canarytail command [SUBCOMMAND] [OPTIONS]

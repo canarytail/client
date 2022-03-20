@@ -16,6 +16,7 @@ Canarytail requires a place to store keys and the history of the canaries you ge
 Canaries need to be signed by their author and associated with a specific website or project name, so you must tell canarytail the domain name of the website, or if you don't have publishing access to the domain's root folder (e.g. mydomain.com/canary.json), you can tell canarytail the name of the asset the canary is for instead.
 
 `./canarytail key new mydomain.com`
+
 `./canarytail key new myyoutubeaccount`
 
 ### Your first canary
@@ -29,6 +30,7 @@ Because canaries work by simply alerting others of *changes* in their state via 
 You can generate the canary by using the following:
 
 `./canarytail canary new mydomain.com`
+
 `./canarytail canary new myyoutubeaccount`
 
 This would generate a new canary for mydomain.com where you are choosing *not* to claim never having received a warrant.

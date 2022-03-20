@@ -19,12 +19,6 @@ Canaries need to be signed by their author and associated with a specific websit
 
 `./canarytail key new myyoutubeaccount`
 
-### Your first canary
-
-Canaries are created by first establishing the current claims of the canary. The default is to start off with the assumption that there have been no requests, demands, or compromises of any kind. By generating a new canary without specifying differently, your canary will be signed to announce that none of those events have taken place.
-
-Because canaries work by simply alerting others of *changes* in their state via absence of claims, if any of those events have *already* taken place or are common and regular occurances, you should mark sure the first canary specifies this to avoid unnecessarily tripping the canary later which might confuse your followers. If you never claim in your canary that you *haven't* receive warrants, then whenever you do receive them you will not need to trip the canary as nothing has actually changed.
-
 ### Generating the canary
 
 You can generate the canary by using the following:
@@ -32,10 +26,6 @@ You can generate the canary by using the following:
 `./canarytail canary new mydomain.com`
 
 `./canarytail canary new myyoutubeaccount`
-
-This would generate a new canary for mydomain.com where you are choosing *not* to claim never having received a warrant.
-
-`./canarytail canary new mydomain.com --WAR`
 
 
 ## Installation

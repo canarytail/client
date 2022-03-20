@@ -100,7 +100,7 @@ Commands:
                               in $CANARY_HOME/DOMAIN, and saves to that same path.
 
                               Codes provided in OPTIONS will be removed from the canary,
-                              signifying that event has triggered the canary.
+                              signifying that event has tripped the canary.
 
       update DOMAIN [--OPTIONS]
                               Updates the existing canary named DOMAIN. If no OPTIONS
@@ -109,7 +109,7 @@ Commands:
                               (e.g. renewing for a month).
 
                               Codes provided in OPTIONS will be removed from the canary,
-                              signifying that event has triggered the canary.
+                              signifying that event has tripped the canary.
                               
 
       Valid OPTIONS:
@@ -139,7 +139,7 @@ Usage examples:
 New canary signing key               ./canarytail key new mydomain.com
 New canary with defaults             ./canarytail canary new mydomain.com      
 Renew existing canary 30 more days   ./canarytail canary update mydomain.com
-Trigger canary for warrant           ./canarytail canary update mydomain.com --WAR
+Trip canary for warrant              ./canarytail canary update mydomain.com --WAR
 Validate a canary on a site          ./canarytail canary validate https://mydomain.com/canary.json
 Validate a canary locally            ./canarytail canary validate ~/canary.json
 ```

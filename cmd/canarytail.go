@@ -10,7 +10,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -190,7 +192,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	if cmd.MinSigners < 1 {
 		cmd.MinSigners = 1
 	}
-
+	canaryTime := time.Now()
 	authorKey := canarytail.FormatKey(publickKey)
 	// compose the canary
 	canary := &canarytail.Canary{
@@ -199,9 +201,9 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 			Domain:     cmd.Domain,
 			MinSigners: cmd.MinSigners,
 			Codes:      getCodes(cmd),
-			Release:    time.Now().Format(canarytail.TimestampLayout),
+			Release:    canaryTime.Format(canarytail.TimestampLayout),
 			Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
-			Expiry:     time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
+			Expiry:     canaryTime.Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
 			PublicKeys: []canarytail.PublicKey{
 				{
 					Role:     canarytail.RoleAuthor,
@@ -244,8 +246,14 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	}
 
 	// and print it
+	fileName := canaryFileName(canary.Claim.Domain, canaryTime)
+	latestFileName := canaryLatestFileName(canary.Claim.Domain)
 	canaryFormatted := canary.Format()
-	fp := path.Join(dir, "canary.json")
+	fp := path.Join(dir, fileName)
+	if err := writeToFile(fp, canaryFormatted); err != nil {
+		return err
+	}
+	fp = path.Join(dir, latestFileName)
 	if err := writeToFile(fp, canaryFormatted); err != nil {
 		return err
 	}
@@ -341,7 +349,11 @@ func printNextSignerSuggestion(c *canarytail.Canary) {
 func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	dir := canaryDirSafe(cmd.Domain)
 
-	canary, err := readCanaryFile(path.Join(dir, "canary.json"))
+	fileName, err := getLatestCanaryFileName(dir)
+	if err != nil {
+		return err
+	}
+	canary, err := readCanaryFile(path.Join(dir, fileName))
 	if err != nil {
 		return err
 	}
@@ -363,10 +375,11 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	}
 
 	// update the canary
+	canaryTime := time.Now()
 	canary.Claim.MinSigners = cmd.MinSigners
-	canary.Claim.Release = time.Now().Format(canarytail.TimestampLayout)
+	canary.Claim.Release = canaryTime.Format(canarytail.TimestampLayout)
 	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted()
-	canary.Claim.Expiry = time.Now().Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)
+	canary.Claim.Expiry = canaryTime.Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)
 	canary.Version = canarytail.StandardVersion
 	canary.Claim.Codes = getCodes(cmd)
 
@@ -435,10 +448,17 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 
 	// and print it
 	canaryFormatted := canary.Format()
-	fp := path.Join(dir, "canary.json")
+	newFileName := canaryFileName(canary.Claim.Domain, canaryTime)
+	latestFileName := canaryLatestFileName(canary.Claim.Domain)
+	fp := path.Join(dir, newFileName)
 	if err := writeToFile(fp, canaryFormatted); err != nil {
 		return err
 	}
+	fp = path.Join(dir, latestFileName)
+	if err := writeToFile(fp, canaryFormatted); err != nil {
+		return err
+	}
+
 	absFp, err := filepath.Abs(fp)
 	if err != nil {
 		absFp = fp
@@ -681,4 +701,66 @@ func readCanaryFile(path string) (canarytail.Canary, error) {
 	var canary canarytail.Canary
 	err = json.Unmarshal(canaryJSON, &canary)
 	return canary, err
+}
+
+const (
+	// canaryFileNameRegex matches strings like "canary.mydomain.com.1234567890.json"
+	canaryFileNameRegex            = `canary\..+\.\d+\.json`
+	canaryFileNameTimeCaptureRegex = `canary\..+\.(\d+)\.json`
+)
+
+var (
+	ErrCanaryNotFound = errors.New("canary not found")
+)
+
+func canaryFileName(domain string, t time.Time) string {
+	return fmt.Sprintf("canary.%s.%d.json", domain, t.UnixMilli())
+}
+
+func canaryLatestFileName(domain string) string {
+	return fmt.Sprintf("canary.%s.latest.json", domain)
+}
+
+func getLatestCanaryFileName(dir string) (fname string, err error) {
+	fnRegex, err := regexp.Compile(canaryFileNameRegex)
+	if err != nil {
+		return "", err
+	}
+	fnCaptureRegex, err := regexp.Compile(canaryFileNameTimeCaptureRegex)
+	if err != nil {
+		return "", err
+	}
+
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	maxTs := -1
+	for i := 0; i < len(files); i++ {
+		if files[i].IsDir() {
+			continue
+		}
+		if !fnRegex.MatchString(files[i].Name()) {
+			continue
+		}
+
+		// If fnRegex matches, then fnCaptureRegex will always capture the timestamp.
+		match := fnCaptureRegex.FindStringSubmatch(files[i].Name())
+		ts, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue
+		}
+
+		if ts > maxTs {
+			maxTs = ts
+			fname = files[i].Name()
+		}
+	}
+
+	if fname == "" {
+		return "", ErrCanaryNotFound
+	}
+
+	return fname, nil
 }

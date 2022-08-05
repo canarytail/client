@@ -42,6 +42,7 @@ var cli struct {
 		Validate canaryValidateCmd `cmd help:"Validates a canary's signature"`
 		Sign     canarySignCmd     `cmd help:"Sign's a canary with keys stored in $CANARY_HOME/DOMAIN"`
 		Pubkey   canaryPubkeyCmd   `cmd help:"Print your public key for the domain. Use 'key new' command to create one if it does not exist."`
+		Mirrors  canaryMirrorsCmd  `cmd help:"Update mirrors in the canary. Use --add to add new mirrors, --delete to delete canaries. Without --add and --delete it will print the existing mirrors."`
 	} `cmd help:"This command is for manipulating canaries."`
 
 	Version versionCmd `cmd help:"Show version and exit"`
@@ -763,4 +764,136 @@ func getLatestCanaryFileName(dir string) (fname string, err error) {
 	}
 
 	return fname, nil
+}
+
+type canaryMirrorsCmd struct {
+	Domain string   `arg name:"DOMAIN"`
+	Add    []string `name:"add" help:"Mirrors to add. Comma separated."`
+	Delete []string `name:"delete" help:"Mirrors to remove. Comma separated."`
+}
+
+func (cmd *canaryMirrorsCmd) Run(ctx *context) error {
+	return updateMirrorsIncanary(cmd.Domain, cmd.Add, cmd.Delete, readKeyPair)
+}
+
+func updateMirrorsIncanary(domain string, add, del []string, signingKeyPairReader keyPairReader) error {
+	dir := canaryDirSafe(domain)
+
+	fileName, err := getLatestCanaryFileName(dir)
+	if err != nil {
+		return err
+	}
+	canary, err := readCanaryFile(path.Join(dir, fileName))
+	if err != nil {
+		return err
+	}
+
+	if len(add) == 0 && len(del) == 0 {
+		fmt.Println("Mirrors:", canary.Claim.Mirrors)
+		return nil
+	}
+
+	// read the panic key pair for this canary alias
+	publicPanicKey, _, err := readPanicKeyPair(dir)
+	if err != nil {
+		return err
+	}
+
+	// read the key pair for this canary alias
+	publicSigningKey, privateSigningKey, err := signingKeyPairReader(dir)
+	if err != nil {
+		return err
+	}
+
+	// update the canary
+	canaryTime := time.Now()
+
+	// if the public key is not there, add it
+	publicKeyEnc := canarytail.FormatKey(publicSigningKey)
+	if publicKeyEnc != canary.Claim.PanicKey {
+		foundPubKey := false
+		for _, x := range canary.Claim.PublicKeys {
+			if x.Key == publicKeyEnc {
+				foundPubKey = true
+				break
+			}
+		}
+		if !foundPubKey {
+			// First signers is the author.
+			canary.Claim.PublicKeys = append([]canarytail.PublicKey{{
+				Role:     canarytail.RoleAuthor,
+				Key:      publicKeyEnc,
+				Required: true,
+			}}, canary.Claim.PublicKeys...)
+		}
+	}
+
+	// if the panic key is not the same, error out
+	panicKeyEnc := canarytail.FormatKey(publicPanicKey)
+	if panicKeyEnc == publicKeyEnc && panicKeyEnc != canary.Claim.PanicKey {
+		return errors.New("The panic key does not match")
+	}
+
+	// Update the mirrors.
+	var oldMirrors, newMirrors []string
+	newMirrorsMap := make(map[string]struct{})
+	for _, m := range canary.Claim.Mirrors {
+		oldMirrors = append(oldMirrors, m)
+		newMirrorsMap[m] = struct{}{}
+	}
+	for _, m := range add {
+		m = strings.TrimSpace(m)
+		newMirrorsMap[m] = struct{}{}
+	}
+	for _, m := range del {
+		m = strings.TrimSpace(m)
+		delete(newMirrorsMap, m)
+	}
+	for m, _ := range newMirrorsMap {
+		newMirrors = append(newMirrors, m)
+	}
+	sort.Strings(newMirrors)
+	if len(oldMirrors) == len(newMirrors) {
+		// Don't do anything if mirrors have not changed.
+		same := true
+		for i := range oldMirrors {
+			if oldMirrors[i] != newMirrors[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			fmt.Println("No mirrors changed. Existing mirrors:", canary.Claim.Mirrors)
+			return nil
+		}
+	}
+
+	canary.Claim.Mirrors = newMirrors
+
+	// sign it
+	err = canary.Sign(privateSigningKey, publicSigningKey)
+	if err != nil {
+		return err
+	}
+
+	// and print it
+	canaryFormatted := canary.Format()
+	newFileName := canaryFileName(canary.Claim.Domain, canaryTime)
+	latestFileName := canaryLatestFileName(canary.Claim.Domain)
+	fp := path.Join(dir, newFileName)
+	if err := writeToFile(fp, canaryFormatted); err != nil {
+		return err
+	}
+	fp = path.Join(dir, latestFileName)
+	if err := writeToFile(fp, canaryFormatted); err != nil {
+		return err
+	}
+
+	absFp, err := filepath.Abs(fp)
+	if err != nil {
+		absFp = fp
+	}
+	fmt.Println("Updated Mirrors:", canary.Claim.Mirrors)
+	fmt.Printf("Updated canary has been stored at %q\n", absFp)
+	return nil
 }

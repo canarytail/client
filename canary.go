@@ -34,6 +34,7 @@ type CanaryClaim struct {
 	Expiry     string      `json:"expiry"`  // 2019-03-06T22:23:09.963
 	Freshness  string      `json:"freshness"`
 	Codes      []string    `json:"codes"`
+	Mirrors    []string    `json:"mirrors"`
 }
 
 // CanarySignature we will keep this as a string for now, in the future it will support several signatures
@@ -49,6 +50,7 @@ type CanarySignatureSet struct {
 	Expiry     CanarySignature `json:"expiry"`
 	Freshness  CanarySignature `json:"freshness"`
 	Codes      CanarySignature `json:"codes"`
+	Mirrors    CanarySignature `json:"mirrors"`
 }
 
 type PublicKey struct {
@@ -220,6 +222,9 @@ func (c *Canary) Sign(privKey, pubKey []byte) (err error) {
 	if signatureSet.Codes, err = c.signField(c.Claim.Codes, privKey); err != nil {
 		return
 	}
+	if signatureSet.Mirrors, err = c.signField(c.Claim.Mirrors, privKey); err != nil {
+		return
+	}
 	return
 }
 
@@ -269,6 +274,9 @@ func (c *Canary) ValidateSignatures(pubKey []byte) bool {
 		return false
 	}
 	if !c.validateSignature(c.Claim.Codes, signatureSet.Codes, pubKey) {
+		return false
+	}
+	if !c.validateSignature(c.Claim.Mirrors, signatureSet.Mirrors, pubKey) {
 		return false
 	}
 	return true

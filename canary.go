@@ -360,13 +360,7 @@ func (c Canary) PanicKey() []byte {
 }
 
 // Validate validates if the Canary claims indicate some sort of issue
-func (c Canary) Validate() (bool, error) {
-	// validate the signatures with the public key
-	validator := NewCanaryValidator(c)
-	if ok, err := validator.Validate(); !ok {
-		return false, err
-	}
-
+func (c Canary) Validate(useBitcoin bool, moneroNode string) (bool, error) {
 	// check if the canary has expired
 	if c.IsExpired() {
 		return false, fmt.Errorf("Could not validate the canary: the canary has expired")
@@ -382,13 +376,11 @@ func (c Canary) Validate() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("Could not validate the canary: the block provided seems not to be valid, or there is an issue retrieving the block info: %v", err)
 	}
-	blockInfo, err := GetBlockInfo(blockHash)
-	if err != nil {
-		return false, fmt.Errorf("Could not validate the canary: the block provided seems not to be valid, or there is an issue retrieving the block info: %v", err)
-	}
 
 	// check block's freshness in the blockchain (compare against Release claim? 1h tolerance?)
-	blockReleasedTime := time.Unix(blockInfo.Time, 0)
+	blockReleasedTime := time.Unix(GetBlockTimeByHash(blockHash, moneroNode, useBitcoin), 0)
+	fmt.Println("wtflol:", blockReleasedTime)
+
 	if c.ReleaseTimestamp().Sub(blockReleasedTime) > time.Hour*1 {
 		return false, fmt.Errorf("Could not validate the canary: the block provided was more than 1h older than the release date of the canary")
 	}
@@ -397,6 +389,12 @@ func (c Canary) Validate() (bool, error) {
 	missingCodes := c.MissingCodes()
 	if len(missingCodes) > 0 {
 		return false, fmt.Errorf("Could not validate the canary: some codes are missing: %v", missingCodes)
+	}
+
+	// validate the signatures with the public key
+	validator := NewCanaryValidator(c)
+	if ok, err := validator.Validate(); !ok {
+		return false, err
 	}
 
 	return true, nil

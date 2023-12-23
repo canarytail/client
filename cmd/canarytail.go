@@ -130,6 +130,8 @@ type canaryOpCmd struct {
 	SEIZE      bool     `name:"SEIZE" help:"Hardware or data seized, unlikely compromised"`
 	MinSigners int      `name:"min-signers" help:"Minimum number of signers that are required to sign the canary for it to be valid (default and minimum allowed is 1)"`
 	Signers    []string `name:"signers" help:"List of all the signers that can sign this canary in the format 'name1:pubkey1,name2:pubkey2:required,name3:pubkey3,...'. Here the optional ':required' means that the signer is required to sign the canary. Mentioning author's public key is optional and should be used to only add a signer name to the author. Use this to also replace the list of signers."`
+
+	MoneroNode string   `name:"monero-node" help:"http(s) address of Monero Node used to generate freshness validator. Must be a full URL. You can access onion/i2p nodes by setting HTTP_PROXY. If not supplied, a random one will be chosen from https://monero.fail/."`
 }
 
 func getCodes(cmd canaryOpCmd) []string {
@@ -203,7 +205,7 @@ func generateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 			MinSigners: cmd.MinSigners,
 			Codes:      getCodes(cmd),
 			Release:    canaryTime.Format(canarytail.TimestampLayout),
-			Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(),
+			Freshness:  canarytail.GetLastBlockChainBlockHashFormatted(cmd.MoneroNode),
 			Expiry:     canaryTime.Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout),
 			PublicKeys: []canarytail.PublicKey{
 				{
@@ -379,7 +381,7 @@ func updateCanary(cmd canaryOpCmd, signingKeyPairReader keyPairReader) error {
 	canaryTime := time.Now()
 	canary.Claim.MinSigners = cmd.MinSigners
 	canary.Claim.Release = canaryTime.Format(canarytail.TimestampLayout)
-	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted()
+	canary.Claim.Freshness = canarytail.GetLastBlockChainBlockHashFormatted(cmd.MoneroNode)
 	canary.Claim.Expiry = canaryTime.Add(time.Duration(cmd.Expiry) * time.Minute).Format(canarytail.TimestampLayout)
 	canary.Version = canarytail.StandardVersion
 	canary.Claim.Codes = getCodes(cmd)
@@ -518,7 +520,9 @@ func (cmd *canaryPubkeyCmd) Run(ctx *context) error {
 }
 
 type canaryValidateCmd struct {
-	URI string `arg name:"uri"`
+	UseBitcoin bool    `help:"Use Bitcoin blocks to validate freshness hash (for backwards compatibility)."`
+	MoneroNode string  `name:"monero-node" help:"http(s) address of Monero Node used to generate freshness validator. Must be a full URL. You can access onion/i2p nodes by setting HTTP_PROXY. If not supplied, a random one will be chosen from https://monero.fail/."`
+	URI string         `arg name:"uri"`
 }
 
 func (cmd *canaryValidateCmd) Run(ctx *context) error {
@@ -530,7 +534,7 @@ func (cmd *canaryValidateCmd) Run(ctx *context) error {
 
 	fmt.Printf("Validating canary %v...\n", cmd.URI)
 
-	if ok, err := canary.Validate(); !ok {
+	if ok, err := canary.Validate(cmd.UseBitcoin, cmd.MoneroNode); !ok {
 		return err
 	}
 	fmt.Println("OK!")
